@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "835730539826",
+    "project_id": "site-track-pro",
+    "storage_bucket": "site-track-pro.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:835730539826:android:2e9c1cf7b66de0d363832b",
+        "android_client_info": {
+          "package_name": "com.example.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBTsInFyCeSHK3K6Y2Gr0LC09pjlM3tUR0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:835730539826:android:43d2d677a1d38da063832b",
+        "android_client_info": {
+          "package_name": "com.pro.sitetrack"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBTsInFyCeSHK3K6Y2Gr0LC09pjlM3tUR0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
