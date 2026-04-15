@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mobile/add_work_progress_screen.dart';
+import 'package:mobile/add_work_qty_screen.dart';
 import 'package:mobile/add_material_received_screen.dart';
 import 'package:mobile/add_material_used_screen.dart';
 import 'add_labour_screen.dart';
@@ -21,26 +23,26 @@ class ProjectDetailScreen extends StatefulWidget {
 class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   bool isSubmitted = false;
   bool isLocked = true;
-  bool isSubmitting = false;
 
   DateTime selectedDate = DateTime.now();
 
-  String get formattedDate {
-    return selectedDate.toString().substring(0, 10);
+  String get formattedDate => selectedDate.toIso8601String().substring(0, 10);
+
+  @override
+  void initState() {
+    super.initState();
+    loadSubmissionStatus();
   }
 
   Future<void> loadSubmissionStatus() async {
-    String selected = formattedDate;
-
     var snapshot = await FirebaseFirestore.instance
         .collection('daily_logs')
         .where('projectId', isEqualTo: widget.projectId)
-        .where('date', isEqualTo: selected)
+        .where('date', isEqualTo: formattedDate)
         .get();
 
     if (snapshot.docs.isNotEmpty) {
       var data = snapshot.docs.first;
-
       isSubmitted = data['isSubmitted'] == true;
       isLocked = data['isLocked'] == true;
     } else {
@@ -51,67 +53,34 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     setState(() {});
   }
 
-  @override
-  void initState() {
-    super.initState();
-    loadSubmissionStatus();
-  }
-
-  Future<void> submitToday(String projectId) async {
-    String selected = formattedDate;
-
-    var query = await FirebaseFirestore.instance
-        .collection('daily_logs')
-        .where('projectId', isEqualTo: projectId)
-        .where('date', isEqualTo: selected)
-        .get();
-
-    if (query.docs.isEmpty) {
-      await FirebaseFirestore.instance.collection('daily_logs').add({
-        "projectId": projectId,
-        "date": selected,
-        "isSubmitted": true,
-        "isLocked": true,
-        "createdAt": Timestamp.now(),
-      });
-    } else {
-      await query.docs.first.reference.update({
-        "isSubmitted": true,
-        "isLocked": true,
-      });
-    }
-  }
-
-  Future<bool> confirmSubmit() async {
-    return await showDialog(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              title: const Text("Confirm Submission"),
-              content: const Text(
-                "Are you sure you want to submit?\n\nOnce submitted, this cannot be edited unless unlocked by admin.",
+  // 🔥 Reusable Card
+  Widget _buildListCard({
+    required String title,
+    required String subtitle,
+    required String date,
+    VoidCallback? onEdit,
+  }) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      child: ListTile(
+        title: Text(title),
+        subtitle: Text(subtitle),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(date, style: const TextStyle(fontSize: 12)),
+            const SizedBox(width: 8),
+            if (!isLocked && onEdit != null)
+              IconButton(
+                icon: const Icon(Icons.edit, color: Colors.blue),
+                onPressed: onEdit,
               ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context, false); // Cancel
-                  },
-                  child: const Text("Cancel"),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context, true); // Confirm
-                  },
-                  child: const Text("Confirm"),
-                ),
-              ],
-            );
-          },
-        ) ??
-        false;
+          ],
+        ),
+      ),
+    );
   }
 
-  // 🔥 Section Header with Add button
   Widget sectionTitle(String title, VoidCallback? onAdd) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -134,10 +103,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.projectName)),
-
       body: Column(
         children: [
-          // 🔥 TOP BAR (DATE + SUBMIT)
+          // 📅 DATE
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             child: Row(
@@ -154,9 +122,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     );
 
                     if (picked != null) {
-                      setState(() {
-                        selectedDate = picked;
-                      });
+                      setState(() => selectedDate = picked);
                       await loadSubmissionStatus();
                     }
                   },
@@ -164,9 +130,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     children: [
                       const Icon(Icons.calendar_today, size: 18),
                       const SizedBox(width: 6),
+
+                      // ✅ FIX: show Today
                       Text(
                         formattedDate ==
-                                DateTime.now().toString().substring(0, 10)
+                                DateTime.now().toIso8601String().substring(
+                                  0,
+                                  10,
+                                )
                             ? "Today"
                             : formattedDate,
                         style: const TextStyle(fontSize: 16),
@@ -175,282 +146,304 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   ),
                 ),
 
-                // ✅ SUBMIT
+                // ✅ SUBMIT BUTTON BACK
                 ElevatedButton(
-                  onPressed: isLocked || isSubmitting
+                  onPressed: isLocked
                       ? null
                       : () async {
-                          bool confirmed = await confirmSubmit();
+                          bool confirmed =
+                              await showDialog(
+                                context: context,
+                                builder: (_) => AlertDialog(
+                                  title: const Text("Confirm Submission"),
+                                  content: const Text(
+                                    "Once submitted, it will be locked.",
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, false),
+                                      child: const Text("Cancel"),
+                                    ),
+                                    ElevatedButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, true),
+                                      child: const Text("Confirm"),
+                                    ),
+                                  ],
+                                ),
+                              ) ??
+                              false;
 
                           if (!confirmed) return;
 
-                          setState(() => isSubmitting = true);
+                          await FirebaseFirestore.instance
+                              .collection('daily_logs')
+                              .add({
+                                "projectId": widget.projectId,
+                                "date": formattedDate,
+                                "isSubmitted": true,
+                                "isLocked": true,
+                                "createdAt": Timestamp.now(),
+                              });
 
-                          await submitToday(projectId);
                           await loadSubmissionStatus();
-
-                          setState(() => isSubmitting = false);
 
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text("Day submitted")),
                           );
                         },
-                  child: isSubmitting
-                      ? const SizedBox(
-                          height: 16,
-                          width: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(
-                          isLocked
-                              ? "Locked"
-                              : isSubmitted
-                              ? "Resubmit"
-                              : "Submit",
-                        ),
+                  child: Text(
+                    isLocked
+                        ? "Locked"
+                        : isSubmitted
+                        ? "Resubmit"
+                        : "Submit",
+                  ),
                 ),
               ],
             ),
           ),
 
-          const SizedBox(height: 5),
-
           Expanded(
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  // 🔹 LABOUR
+                  /// 🔹 LABOUR
                   sectionTitle(
                     "Labour",
                     isLocked
                         ? null
-                        : () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    AddLabourScreen(projectId: projectId),
-                              ),
-                            );
-                          },
-                  ),
-
-                  StreamBuilder(
-                    stream: FirebaseFirestore.instance
-                        .collection('labour_entries')
-                        .where('projectId', isEqualTo: projectId)
-                        .where('date', isEqualTo: formattedDate)
-                        .orderBy('createdAt', descending: true)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) {
-                        return const CircularProgressIndicator();
-                      }
-
-                      var entries = snapshot.data!.docs;
-
-                      if (entries.isEmpty) {
-                        return const Text("No labour entries");
-                      }
-
-                      return Column(
-                        children: entries.map((e) {
-                          return Card(
-                            child: ListTile(
-                              title: Text(
-                                "${e['typeOfWork']} - ${e['description']}",
-                              ),
-                              subtitle: Text(
-                                "₹${e['totalAmount']} | Skilled: ${e['skilledCount']} | Helper: ${e['helperCount']}",
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(e['date']),
-                                  if (!isLocked)
-                                    IconButton(
-                                      icon: const Icon(Icons.edit),
-                                      onPressed: () async {
-                                        final result = await Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => AddLabourScreen(
-                                              projectId: projectId,
-                                              existingData: e.data(),
-                                              docId: e.id,
-                                            ),
-                                          ),
-                                        );
-
-                                        // 🔥 refresh after returning
-                                        if (result == true) {
-                                          await loadSubmissionStatus();
-                                          setState(() {});
-                                        }
-                                      },
-                                    ),
-                                ],
-                              ),
+                        : () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  AddLabourScreen(projectId: projectId),
                             ),
-                          );
-                        }).toList(),
-                      );
-                    },
+                          ),
+                  ),
+                  _buildStream(
+                    'labour_entries',
+                    (e) => _buildListCard(
+                      title: "${e['typeOfWork']} - ${e['description']}",
+                      subtitle:
+                          "₹${e['totalAmount']} | Skilled: ${e['skilledCount']} | Helper: ${e['helperCount']}",
+                      date: e['date'],
+                      onEdit: () => _openLabourEdit(e),
+                    ),
                   ),
 
-                  // 🔹 MATERIAL RECEIVED
+                  /// 🔹 MATERIAL RECEIVED
                   sectionTitle(
                     "Materials Received",
                     isLocked
                         ? null
-                        : () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => AddMaterialReceivedScreen(
-                                  projectId: projectId,
-                                  selectedDate: formattedDate,
-                                ),
+                        : () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AddMaterialReceivedScreen(
+                                projectId: projectId,
+                                selectedDate: formattedDate,
                               ),
-                            );
-                          },
+                            ),
+                          ),
+                  ),
+                  _buildStream(
+                    'materials_received',
+                    (e) => _buildListCard(
+                      title: e['material'],
+                      subtitle:
+                          "${e['quantity']} ${e['unit']} (${e['baseQuantity']})",
+                      date: e['date'],
+                      onEdit: () => _openMaterialReceivedEdit(e),
+                    ),
                   ),
 
-                  StreamBuilder(
-                    stream: FirebaseFirestore.instance
-                        .collection('materials_received')
-                        .where('projectId', isEqualTo: projectId)
-                        .where('date', isEqualTo: formattedDate)
-                        .orderBy('createdAt', descending: true)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) return const SizedBox();
-
-                      var docs = snapshot.data!.docs;
-
-                      if (docs.isEmpty)
-                        return const Text("No materials received");
-
-                      return Column(
-                        children: docs.map((e) {
-                          return ListTile(
-                            title: Text(e['material']),
-                            subtitle: Text(
-                              "${e['quantity']} ${e['unit']} (${e['baseQuantity']})",
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(e['date']),
-
-                                if (!isLocked)
-                                  IconButton(
-                                    icon: const Icon(Icons.edit),
-                                    onPressed: () async {
-                                      final result = await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              AddMaterialReceivedScreen(
-                                                projectId: projectId,
-                                                selectedDate: formattedDate,
-                                                existingData: e.data(),
-                                                docId: e.id,
-                                              ),
-                                        ),
-                                      );
-
-                                      if (result == true) {
-                                        setState(() {});
-                                      }
-                                    },
-                                  ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      );
-                    },
-                  ),
-
-                  // 🔹 MATERIAL USED
+                  /// 🔹 MATERIAL USED
                   sectionTitle(
                     "Materials Used",
                     isLocked
                         ? null
-                        : () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => AddMaterialUsedScreen(
-                                  projectId: projectId,
-                                  selectedDate: formattedDate,
-                                ),
+                        : () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AddMaterialUsedScreen(
+                                projectId: projectId,
+                                selectedDate: formattedDate,
                               ),
-                            );
-                          },
+                            ),
+                          ),
+                  ),
+                  _buildStream(
+                    'materials_used',
+                    (e) => _buildListCard(
+                      title: e['material'],
+                      subtitle:
+                          "${e['quantity']} ${e['unit']} (${e['baseQuantity']})",
+                      date: e['date'],
+                      onEdit: () => _openMaterialUsedEdit(e),
+                    ),
                   ),
 
-                  StreamBuilder(
-                    stream: FirebaseFirestore.instance
-                        .collection('materials_used')
-                        .where('projectId', isEqualTo: projectId)
-                        .where('date', isEqualTo: formattedDate)
-                        .orderBy('createdAt', descending: true)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) return const SizedBox();
-
-                      var docs = snapshot.data!.docs;
-
-                      if (docs.isEmpty) return const Text("No materials used");
-
-                      return Column(
-                        children: docs.map((e) {
-                          return ListTile(
-                            title: Text(e['material']),
-                            subtitle: Text(
-                              "${e['quantity']} ${e['unit']} (${e['baseQuantity']})",
+                  /// 🔹 WORK QTY
+                  sectionTitle(
+                    "Qty of Work",
+                    isLocked
+                        ? null
+                        : () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AddWorkQtyScreen(
+                                projectId: projectId,
+                                selectedDate: formattedDate,
+                              ),
                             ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(e['date']),
+                          ),
+                  ),
+                  _buildStream(
+                    'work_qty_entries',
+                    (e) => _buildListCard(
+                      title: "${e['typeOfWork']} - ${e['description']}",
+                      subtitle:
+                          "Planned: ${e['plannedQty']} ${e['unit']}\nActual: ${e['actualQty']} ${e['unit']}",
+                      date: e['date'],
+                      onEdit: () => _openWorkQtyEdit(e),
+                    ),
+                  ),
 
-                                if (!isLocked)
-                                  IconButton(
-                                    icon: const Icon(Icons.edit),
-                                    onPressed: () async {
-                                      final result = await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => AddMaterialUsedScreen(
-                                            projectId: projectId,
-                                            selectedDate:
-                                                formattedDate, // 🔥 important
-                                            existingData: e.data(),
-                                            docId: e.id,
-                                          ),
-                                        ),
-                                      );
-
-                                      if (result == true) {
-                                        setState(() {});
-                                      }
-                                    },
-                                  ),
-                              ],
+                  /// 🔹 WORK PROGRESS
+                  sectionTitle(
+                    "Work Progress",
+                    isLocked
+                        ? null
+                        : () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AddWorkProgressScreen(
+                                projectId: projectId,
+                                selectedDate: formattedDate,
+                              ),
                             ),
-                          );
-                        }).toList(),
-                      );
-                    },
+                          ),
+                  ),
+                  _buildStream(
+                    'work_progress_entries',
+                    (e) => _buildListCard(
+                      title: "${e['typeOfWork']} - ${e['description']}",
+                      subtitle: "Progress: ${e['progress']}%\n${e['remarks']}",
+                      date: e['date'],
+                      onEdit: () => _openWorkProgressEdit(e),
+                    ),
                   ),
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStream(
+    String collection,
+    Widget Function(QueryDocumentSnapshot e) builder,
+  ) {
+    return StreamBuilder(
+      stream: FirebaseFirestore.instance
+          .collection(collection)
+          .where('projectId', isEqualTo: widget.projectId)
+          .where('date', isEqualTo: formattedDate)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.all(10),
+            child: CircularProgressIndicator(),
+          );
+        }
+
+        var docs = snapshot.data!.docs;
+
+        if (docs.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(10),
+            child: Text("No data"),
+          );
+        }
+
+        return Column(children: docs.map(builder).toList());
+      },
+    );
+  }
+
+  // 🔥 EDIT HELPERS (FIXED CASTING)
+
+  void _openLabourEdit(e) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddLabourScreen(
+          projectId: widget.projectId,
+          existingData: e.data() as Map<String, dynamic>,
+          docId: e.id,
+        ),
+      ),
+    );
+  }
+
+  void _openMaterialReceivedEdit(e) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddMaterialReceivedScreen(
+          projectId: widget.projectId,
+          selectedDate: formattedDate,
+          existingData: e.data() as Map<String, dynamic>,
+          docId: e.id,
+        ),
+      ),
+    );
+  }
+
+  void _openMaterialUsedEdit(e) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddMaterialUsedScreen(
+          projectId: widget.projectId,
+          selectedDate: formattedDate,
+          existingData: e.data() as Map<String, dynamic>,
+          docId: e.id,
+        ),
+      ),
+    );
+  }
+
+  void _openWorkQtyEdit(e) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddWorkQtyScreen(
+          projectId: widget.projectId,
+          selectedDate: e['date'],
+          existingData: e.data() as Map<String, dynamic>,
+          docId: e.id,
+        ),
+      ),
+    );
+  }
+
+  void _openWorkProgressEdit(e) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddWorkProgressScreen(
+          projectId: widget.projectId,
+          selectedDate: e['date'],
+          existingData: e.data() as Map<String, dynamic>,
+          docId: e.id,
+        ),
       ),
     );
   }
