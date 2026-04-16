@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mobile/add_issue_screen.dart';
+import 'package:mobile/add_photo_screen.dart';
+import 'package:mobile/add_plan_screen.dart';
 import 'package:mobile/add_work_progress_screen.dart';
 import 'package:mobile/add_work_qty_screen.dart';
 import 'package:mobile/add_material_received_screen.dart';
@@ -53,14 +56,48 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     setState(() {});
   }
 
+  Future<void> _deleteItem(String collection, String docId) async {
+    bool confirm =
+        await showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text("Confirm Delete"),
+            content: const Text("Do you want to delete?"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text("Cancel"),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text("Delete"),
+              ),
+            ],
+          ),
+        ) ??
+            false;
+
+    if (!confirm) return;
+
+    await FirebaseFirestore.instance
+        .collection(collection)
+        .doc(docId)
+        .delete();
+  }
+
   // 🔥 Reusable Card
   Widget _buildListCard({
     required String title,
     required String subtitle,
-    required String date,
     VoidCallback? onEdit,
+    VoidCallback? onDelete,
   }) {
     return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(2),
+        side: BorderSide(color: Colors.grey.shade300),
+      ),
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       child: ListTile(
         title: Text(title),
@@ -68,12 +105,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(date, style: const TextStyle(fontSize: 12)),
-            const SizedBox(width: 8),
             if (!isLocked && onEdit != null)
               IconButton(
                 icon: const Icon(Icons.edit, color: Colors.blue),
                 onPressed: onEdit,
+              ),
+
+            if (!isLocked && onDelete != null)
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: onDelete,
               ),
           ],
         ),
@@ -228,8 +269,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       title: "${e['typeOfWork']} - ${e['description']}",
                       subtitle:
                           "₹${e['totalAmount']} | Skilled: ${e['skilledCount']} | Helper: ${e['helperCount']}",
-                      date: e['date'],
                       onEdit: () => _openLabourEdit(e),
+                      onDelete: () => _deleteItem('labour_entries', e.id),
                     ),
                   ),
 
@@ -254,8 +295,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       title: e['material'],
                       subtitle:
                           "${e['quantity']} ${e['unit']} (${e['baseQuantity']})",
-                      date: e['date'],
                       onEdit: () => _openMaterialReceivedEdit(e),
+                      onDelete: () => _deleteItem('materials_received', e.id),
                     ),
                   ),
 
@@ -280,8 +321,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       title: e['material'],
                       subtitle:
                           "${e['quantity']} ${e['unit']} (${e['baseQuantity']})",
-                      date: e['date'],
                       onEdit: () => _openMaterialUsedEdit(e),
+                      onDelete: () => _deleteItem('materials_used', e.id),
                     ),
                   ),
 
@@ -306,8 +347,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       title: "${e['typeOfWork']} - ${e['description']}",
                       subtitle:
                           "Planned: ${e['plannedQty']} ${e['unit']}\nActual: ${e['actualQty']} ${e['unit']}",
-                      date: e['date'],
                       onEdit: () => _openWorkQtyEdit(e),
+                      onDelete: () => _deleteItem('work_qty_entries', e.id),
                     ),
                   ),
 
@@ -331,10 +372,90 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     (e) => _buildListCard(
                       title: "${e['typeOfWork']} - ${e['description']}",
                       subtitle: "Progress: ${e['progress']}%\n${e['remarks']}",
-                      date: e['date'],
                       onEdit: () => _openWorkProgressEdit(e),
+                      onDelete: () => _deleteItem('work_progress_entries', e.id),
                     ),
                   ),
+
+                  sectionTitle(
+                    "Issues / Delay",
+                    isLocked
+                        ? null
+                        : () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AddIssueScreen(
+                            projectId: projectId,
+                            selectedDate: formattedDate,
+                          ),
+                        ),
+                      );
+
+                      if (result == true) setState(() {});
+                    },
+                  ),
+
+                  _buildStream(
+                    'issues_entries',
+                        (e) => _buildListCard(
+                      title: e['issue'],
+                      subtitle: "",
+                      onEdit: () => _openIssueEdit(e),
+                      onDelete: () => _deleteItem('issues_entries', e.id),
+                    ),
+                  ),
+
+                  sectionTitle(
+                    "Tomorrow Plan",
+                    isLocked
+                        ? null
+                        : () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AddPlanScreen(
+                            projectId: projectId,
+                            selectedDate: formattedDate,
+                          ),
+                        ),
+                      );
+
+                      if (result == true) setState(() {});
+                    },
+                  ),
+
+                  _buildStream(
+                    'tomorrow_plan_entries',
+                        (e) => _buildListCard(
+                      title: e['plan'],
+                      subtitle: "",
+                      onEdit: () => _openPlanEdit(e),
+                      onDelete: () => _deleteItem('tomorrow_plan_entries', e.id),
+                    ),
+                  ),
+
+                  sectionTitle(
+                    "Site Photos",
+                    isLocked
+                        ? null
+                        : () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AddPhotoScreen(
+                            projectId: projectId,
+                            selectedDate: formattedDate,
+                          ),
+                        ),
+                      );
+
+                      if (result == true) setState(() {});
+                    },
+                  ),
+
+                  _buildPhotoStream(),
+
                 ],
               ),
             ),
@@ -373,6 +494,74 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         }
 
         return Column(children: docs.map(builder).toList());
+      },
+    );
+  }
+
+  Widget _buildPhotoStream() {
+    return StreamBuilder(
+      stream: FirebaseFirestore.instance
+          .collection('site_photos')
+          .where('projectId', isEqualTo: widget.projectId)
+          .where('date', isEqualTo: formattedDate)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const CircularProgressIndicator();
+        }
+
+        var docs = snapshot.data!.docs;
+
+        if (docs.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(10),
+            child: Text("No photos"),
+          );
+        }
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: docs.length,
+          gridDelegate:
+          const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 5,
+            mainAxisSpacing: 5,
+          ),
+          itemBuilder: (context, index) {
+            var e = docs[index];
+
+            return Stack(
+              children: [
+                Image.network(
+                  e['imageUrl'],
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                ),
+
+                // ❌ DELETE
+                if (!isLocked)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: GestureDetector(
+                      onTap: () =>
+                          _deleteItem('site_photos', e.id),
+                      child: Container(
+                        color: Colors.black54,
+                        child: const Icon(
+                          Icons.close,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        );
       },
     );
   }
@@ -439,6 +628,34 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => AddWorkProgressScreen(
+          projectId: widget.projectId,
+          selectedDate: e['date'],
+          existingData: e.data() as Map<String, dynamic>,
+          docId: e.id,
+        ),
+      ),
+    );
+  }
+
+  void _openIssueEdit(e) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddIssueScreen(
+          projectId: widget.projectId,
+          selectedDate: e['date'],
+          existingData: e.data() as Map<String, dynamic>,
+          docId: e.id,
+        ),
+      ),
+    );
+  }
+
+  void _openPlanEdit(e) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddPlanScreen(
           projectId: widget.projectId,
           selectedDate: e['date'],
           existingData: e.data() as Map<String, dynamic>,
