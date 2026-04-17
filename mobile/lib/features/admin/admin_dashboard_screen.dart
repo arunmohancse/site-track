@@ -6,12 +6,10 @@ class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
 
   @override
-  State<AdminDashboardScreen> createState() =>
-      _AdminDashboardScreenState();
+  State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
 }
 
-class _AdminDashboardScreenState
-    extends State<AdminDashboardScreen> {
+class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   String? selectedProjectId;
   DateTime selectedDate = DateTime.now();
 
@@ -21,12 +19,12 @@ class _AdminDashboardScreenState
 
   double totalCost = 0;
   double labourCost = 0;
+  double materialCost = 0;
 
   int issuesCount = 0;
   int requestsCount = 0;
 
-  String get formattedDate =>
-      selectedDate.toIso8601String().substring(0, 10);
+  String get formattedDate => selectedDate.toIso8601String().substring(0, 10);
 
   @override
   void initState() {
@@ -64,11 +62,13 @@ class _AdminDashboardScreenState
 
       double tCost = 0;
       double lCost = 0;
+      double mCost = 0;
 
       for (var doc in expenseSnapshot.docs) {
         var data = doc.data() as Map<String, dynamic>;
         tCost += (data['totalCost'] ?? 0).toDouble();
         lCost += (data['labourCost'] ?? 0).toDouble();
+        mCost += (data['materialCost'] ?? 0).toDouble();
       }
 
       Query issueQuery = FirebaseFirestore.instance
@@ -76,8 +76,10 @@ class _AdminDashboardScreenState
           .where('date', isEqualTo: formattedDate);
 
       if (selectedProjectId != null) {
-        issueQuery =
-            issueQuery.where('projectId', isEqualTo: selectedProjectId);
+        issueQuery = issueQuery.where(
+          'projectId',
+          isEqualTo: selectedProjectId,
+        );
       }
 
       var issues = await issueQuery.get();
@@ -87,8 +89,10 @@ class _AdminDashboardScreenState
           .where('date', isEqualTo: formattedDate);
 
       if (selectedProjectId != null) {
-        requestQuery =
-            requestQuery.where('projectId', isEqualTo: selectedProjectId);
+        requestQuery = requestQuery.where(
+          'projectId',
+          isEqualTo: selectedProjectId,
+        );
       }
 
       var requests = await requestQuery.get();
@@ -96,6 +100,7 @@ class _AdminDashboardScreenState
       setState(() {
         totalCost = tCost;
         labourCost = lCost;
+        materialCost = mCost;
         issuesCount = issues.docs.length;
         requestsCount = requests.docs.length;
         isLoading = false;
@@ -112,12 +117,9 @@ class _AdminDashboardScreenState
   Future<void> loadProjectBreakdown() async {
     List<Map<String, dynamic>> result = [];
 
-    List<QueryDocumentSnapshot> filteredProjects =
-    selectedProjectId == null
+    List<QueryDocumentSnapshot> filteredProjects = selectedProjectId == null
         ? projects
-        : projects
-        .where((p) => p.id == selectedProjectId)
-        .toList();
+        : projects.where((p) => p.id == selectedProjectId).toList();
 
     for (var project in filteredProjects) {
       String projectId = project.id;
@@ -129,10 +131,15 @@ class _AdminDashboardScreenState
           .get();
 
       double totalCost = 0;
+      double labourCost = 0;
+      double materialCost = 0;
 
       for (var doc in expenseSnapshot.docs) {
-        var data = doc.data();
+        var data = doc.data() as Map<String, dynamic>;
+
         totalCost += (data['totalCost'] ?? 0).toDouble();
+        labourCost += (data['labourCost'] ?? 0).toDouble();
+        materialCost += (data['materialCost'] ?? 0).toDouble();
       }
 
       var issuesSnapshot = await FirebaseFirestore.instance
@@ -144,8 +151,10 @@ class _AdminDashboardScreenState
       result.add({
         "name": project['name'],
         "cost": totalCost,
+        "labour": labourCost,
+        "material": materialCost,
         "issues": issuesSnapshot.docs.length,
-        "id": projectId, // 🔥 IMPORTANT
+        "id": projectId,
       });
     }
 
@@ -158,9 +167,7 @@ class _AdminDashboardScreenState
     return Expanded(
       child: Card(
         elevation: 1,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
@@ -170,8 +177,7 @@ class _AdminDashboardScreenState
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: const TextStyle(fontSize: 12)),
+                  Text(title, style: const TextStyle(fontSize: 12)),
                   Text(
                     value,
                     style: const TextStyle(
@@ -196,15 +202,9 @@ class _AdminDashboardScreenState
             value: selectedProjectId,
             hint: const Text("All Projects"),
             items: [
-              const DropdownMenuItem(
-                value: null,
-                child: Text("All Projects"),
-              ),
+              const DropdownMenuItem(value: null, child: Text("All Projects")),
               ...projects.map(
-                    (p) => DropdownMenuItem(
-                  value: p.id,
-                  child: Text(p['name']),
-                ),
+                (p) => DropdownMenuItem(value: p.id, child: Text(p['name'])),
               ),
             ],
             onChanged: (val) {
@@ -247,41 +247,57 @@ class _AdminDashboardScreenState
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          children: [
-            _buildFilters(),
-            const SizedBox(height: 10),
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                children: [
+                  _buildFilters(),
+                  const SizedBox(height: 10),
 
-            Row(
-              children: [
-                _card(
-                  "Total Cost",
-                  "₹${totalCost.toStringAsFixed(0)}",
-                  Icons.currency_rupee,
-                ),
-                _card(
-                  "Labour Cost",
-                  "₹${labourCost.toStringAsFixed(0)}",
-                  Icons.people,
-                ),
-              ],
+                  Row(
+                    children: [
+                      _card(
+                        "Total Cost",
+                        "₹${totalCost.toStringAsFixed(0)}",
+                        Icons.currency_rupee,
+                      ),
+                      _card(
+                        "Labour",
+                        "₹${labourCost.toStringAsFixed(0)}",
+                        Icons.people,
+                      ),
+                    ],
+                  ),
+
+                  Row(
+                    children: [
+                      _card(
+                        "Material",
+                        "₹${materialCost.toStringAsFixed(0)}",
+                        Icons.inventory, // 🔥 better icon
+                      ),
+                      _card(
+                        "Issues",
+                        issuesCount.toString(),
+                        Icons.warning,
+                      ),
+                    ],
+                  ),
+
+                  Row(
+                    children: [
+                      _card(
+                        "Requests",
+                        requestsCount.toString(),
+                        Icons.request_page,
+                      ),
+                      const Spacer(), // keeps layout clean
+                    ],
+                  ),
+
+                  _buildProjectBreakdown(),
+                ],
+              ),
             ),
-
-            Row(
-              children: [
-                _card("Issues", issuesCount.toString(),
-                    Icons.warning),
-                _card("Requests",
-                    requestsCount.toString(),
-                    Icons.request_page),
-              ],
-            ),
-
-            _buildProjectBreakdown(),
-          ],
-        ),
-      ),
     );
   }
 
@@ -295,9 +311,7 @@ class _AdminDashboardScreenState
       children: [
         const SizedBox(height: 10),
         Text(
-          selectedProjectId == null
-              ? "Project Breakdown"
-              : "Project Summary",
+          selectedProjectId == null ? "Project Breakdown" : "Project Summary",
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 5),
@@ -310,14 +324,15 @@ class _AdminDashboardScreenState
             ),
             child: ListTile(
               title: Text(p['name']),
-              subtitle: Text("Issues: ${p['issues']}"),
+              subtitle: Text(
+                "L: ₹${p['labour'].toStringAsFixed(0)} | M: ₹${p['material'].toStringAsFixed(0)} | Issues: ${p['issues']}",
+              ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     "₹${p['cost'].toStringAsFixed(0)}",
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(width: 6),
                   const Icon(Icons.arrow_forward_ios, size: 14),

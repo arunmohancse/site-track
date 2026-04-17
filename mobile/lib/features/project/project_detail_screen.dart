@@ -259,7 +259,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     'labour_entries',
                     (e) => _buildListCard(
                       title: "${e['typeOfWork']} - ${e['description']}",
-                      subtitle: "₹${e['totalAmount']}",
+                      subtitle: "${e['totalAmount'] ?? 0}",
                       onEdit: () => _openLabourEdit(e),
                       onDelete: () => _deleteItem('labour_entries', e.id),
                     ),

@@ -28,6 +28,8 @@ class _AddMaterialReceivedScreenState extends State<AddMaterialReceivedScreen> {
 
   final qtyController = TextEditingController();
 
+  final amountController = TextEditingController();
+
   Map<String, dynamic>? selectedMaterialData;
 
   bool isSaving = false;
@@ -53,6 +55,7 @@ class _AddMaterialReceivedScreenState extends State<AddMaterialReceivedScreen> {
       selectedMaterial = data['material'];
       selectedUnit = data['unit'];
       qtyController.text = data['quantity'].toString();
+      amountController.text = (data['totalAmount'] ?? 0).toString();
 
       var match = materials.where((m) => m['name'] == selectedMaterial);
 
@@ -79,6 +82,7 @@ class _AddMaterialReceivedScreenState extends State<AddMaterialReceivedScreen> {
   Future<void> saveMaterial() async {
     double qty = double.tryParse(qtyController.text) ?? 0;
     double baseQty = convertToBase(qty);
+    final totalAmount = double.tryParse(amountController.text) ?? 0;
 
     final data = {
       "projectId": widget.projectId,
@@ -88,6 +92,7 @@ class _AddMaterialReceivedScreenState extends State<AddMaterialReceivedScreen> {
       "baseQuantity": baseQty,
       "date": widget.selectedDate,
       "createdAt": Timestamp.now(),
+      "totalAmount": totalAmount,
     };
 
     if (widget.docId != null) {
@@ -167,6 +172,12 @@ class _AddMaterialReceivedScreenState extends State<AddMaterialReceivedScreen> {
                   ),
 
                   const SizedBox(height: 20),
+
+                  TextField(
+                    controller: amountController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(labelText: "Total Amount"),
+                  ),
 
                   ElevatedButton(
                     onPressed: isSaving

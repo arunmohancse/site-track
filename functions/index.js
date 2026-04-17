@@ -1,38 +1,82 @@
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
 
-exports.onLabourCreated = onDocumentCreated(
-  "labour_entries/{docId}",
+exports.onExpenseRecalculate = onDocumentWritten(
+  "{collection}/{docId}",
   async (event) => {
-    const data = event.data.data();
+    const collection = event.params.collection;
 
-    const projectId = data.projectId;
-    const date = data.date;
-    const amount = data.totalAmount || 0;
+    // 🔥 Only react to relevant collections
+    if (
+      collection !== "labour_entries" &&
+      collection !== "materials_received"
+    ) {
+      return;
+    }
+
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+
+    const projectId = after?.projectId || before?.projectId;
+    const date = after?.date || before?.date;
+
+    if (!projectId || !date) return;
 
     const db = admin.firestore();
 
-    // 🔥 UNIQUE DOC ID
-    const expenseId = `${projectId}_${date}`;
+    try {
+      // 🔥 1. Recalculate LABOUR COST
+      const labourSnapshot = await db
+        .collection("labour_entries")
+        .where("projectId", "==", projectId)
+        .where("date", "==", date)
+        .get();
 
-    const ref = db.collection("expenses").doc(expenseId);
+      let totalLabourCost = 0;
 
-    await ref.set(
-      {
-        projectId: projectId,
-        date: date,
+      labourSnapshot.forEach((doc) => {
+        totalLabourCost += doc.data().totalAmount || 0;
+      });
 
-        labourCost: admin.firestore.FieldValue.increment(amount),
-        totalCost: admin.firestore.FieldValue.increment(amount),
+      // 🔥 2. Recalculate MATERIAL COST
+      const materialSnapshot = await db
+        .collection("materials_received")
+        .where("projectId", "==", projectId)
+        .where("date", "==", date)
+        .get();
 
-        materialCost: 0,
-        otherCost: 0,
+      let totalMaterialCost = 0;
 
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true } // 🔥 IMPORTANT
-    );
+      materialSnapshot.forEach((doc) => {
+        totalMaterialCost += doc.data().totalAmount || 0;
+      });
+
+      // 🔥 FINAL TOTAL
+      const totalCost = totalLabourCost + totalMaterialCost;
+
+      // 🔥 UNIQUE DOC ID
+      const expenseId = `${projectId}_${date}`;
+
+      const ref = db.collection("expenses").doc(expenseId);
+
+      await ref.set(
+        {
+          projectId: projectId,
+          date: date,
+
+          labourCost: totalLabourCost,
+          materialCost: totalMaterialCost,
+          totalCost: totalCost,
+
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+    } catch (error) {
+      console.error("Expense recalculation failed:", error);
+    }
   }
 );
