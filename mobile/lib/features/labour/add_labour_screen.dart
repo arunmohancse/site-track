@@ -6,9 +6,13 @@ class AddLabourScreen extends StatefulWidget {
   final Map<String, dynamic>? existingData;
   final String? docId;
 
+  // ✅ ADD THIS (fix for date consistency)
+  final String selectedDate;
+
   const AddLabourScreen({
     super.key,
     required this.projectId,
+    required this.selectedDate,
     this.existingData,
     this.docId,
   });
@@ -18,13 +22,12 @@ class AddLabourScreen extends StatefulWidget {
 }
 
 class _AddLabourScreenState extends State<AddLabourScreen> {
-  final typeController = TextEditingController();
-  final descController = TextEditingController();
   final skilledController = TextEditingController();
   final helperController = TextEditingController();
   final machineController = TextEditingController();
   final amountController = TextEditingController();
   final remarkController = TextEditingController();
+
   List<Map<String, dynamic>> workTypes = [];
 
   String? selectedType;
@@ -64,7 +67,10 @@ class _AddLabourScreenState extends State<AddLabourScreen> {
   Future<void> saveLabour() async {
     final data = {
       "projectId": widget.projectId,
-      "date": DateTime.now().toString().substring(0, 10),
+
+      // ✅ FIXED (IMPORTANT)
+      "date": widget.selectedDate,
+
       "typeOfWork": selectedType,
       "description": selectedDescription,
       "skilledCount": int.tryParse(skilledController.text) ?? 0,
@@ -76,17 +82,15 @@ class _AddLabourScreenState extends State<AddLabourScreen> {
     };
 
     if (widget.docId != null) {
-      // ✏️ UPDATE
       await FirebaseFirestore.instance
           .collection('labour_entries')
           .doc(widget.docId)
           .update(data);
     } else {
-      // ➕ CREATE
       await FirebaseFirestore.instance.collection('labour_entries').add(data);
     }
 
-    Navigator.pop(context);
+    Navigator.pop(context, true);
   }
 
   @override
@@ -97,6 +101,7 @@ class _AddLabourScreenState extends State<AddLabourScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+            /// 🔹 TYPE
             DropdownButtonFormField<String>(
               hint: const Text("Select Type of Work"),
               value: selectedType,
@@ -115,6 +120,8 @@ class _AddLabourScreenState extends State<AddLabourScreen> {
             ),
 
             const SizedBox(height: 10),
+
+            /// 🔹 DESCRIPTION (dependent)
             DropdownButtonFormField<String>(
               hint: const Text("Select Description"),
               value: selectedDescription,
@@ -139,51 +146,48 @@ class _AddLabourScreenState extends State<AddLabourScreen> {
             ),
 
             const SizedBox(height: 10),
+
             TextField(
               controller: skilledController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: "Skilled Count"),
             ),
+
             TextField(
               controller: helperController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: "Helper Count"),
             ),
+
             TextField(
               controller: machineController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: "Machine Hours"),
             ),
+
             TextField(
               controller: amountController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: "Total Amount"),
             ),
+
             TextField(
               controller: remarkController,
               decoration: const InputDecoration(labelText: "Remark"),
             ),
+
             const SizedBox(height: 20),
+
             ElevatedButton(
               onPressed: isSaving
                   ? null
                   : () async {
-                      setState(() {
-                        isSaving = true;
-                      });
+                      setState(() => isSaving = true);
 
                       try {
                         await saveLabour();
-
-                        setState(() {
-                          isSaving = false;
-                        });
-
-                        Navigator.pop(context, true); // go back after save
                       } catch (e) {
-                        setState(() {
-                          isSaving = false;
-                        });
+                        setState(() => isSaving = false);
                         ScaffoldMessenger.of(
                           context,
                         ).showSnackBar(SnackBar(content: Text("Error: $e")));
@@ -195,7 +199,7 @@ class _AddLabourScreenState extends State<AddLabourScreen> {
                       width: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : Text(isSaving ? "Saving..." : "Save"),
+                  : const Text("Save"),
             ),
           ],
         ),

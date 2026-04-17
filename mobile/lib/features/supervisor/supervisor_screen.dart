@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'project_detail_screen.dart';
+import '../project/project_detail_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class SupervisorScreen extends StatefulWidget {

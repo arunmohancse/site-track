@@ -1,42 +1,38 @@
-const {onDocumentCreated} = require("firebase-functions/v2/firestore");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
 
 exports.onLabourCreated = onDocumentCreated(
-    "labour_entries/{docId}",
-    async (event) => {
-      const data = event.data.data();
+  "labour_entries/{docId}",
+  async (event) => {
+    const data = event.data.data();
 
-      const projectId = data.projectId;
-      const date = data.date;
-      const amount = data.totalAmount || 0;
+    const projectId = data.projectId;
+    const date = data.date;
+    const amount = data.totalAmount || 0;
 
-      const db = admin.firestore();
+    const db = admin.firestore();
 
-      const query = await db
-          .collection("expenses")
-          .where("projectId", "==", projectId)
-          .where("date", "==", date)
-          .get();
+    // 🔥 UNIQUE DOC ID
+    const expenseId = `${projectId}_${date}`;
 
-      if (!query.empty) {
-        const doc = query.docs[0];
+    const ref = db.collection("expenses").doc(expenseId);
 
-        await doc.ref.update({
-          labourCost: admin.firestore.FieldValue.increment(amount),
-          totalCost: admin.firestore.FieldValue.increment(amount),
-        });
-      } else {
-        await db.collection("expenses").add({
-          projectId: projectId,
-          date: date,
-          labourCost: amount,
-          materialCost: 0,
-          otherCost: 0,
-          totalCost: amount,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
-    },
+    await ref.set(
+      {
+        projectId: projectId,
+        date: date,
+
+        labourCost: admin.firestore.FieldValue.increment(amount),
+        totalCost: admin.firestore.FieldValue.increment(amount),
+
+        materialCost: 0,
+        otherCost: 0,
+
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true } // 🔥 IMPORTANT
+    );
+  }
 );
